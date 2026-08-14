@@ -297,3 +297,5 @@ $ python main.py
 - `brand_result.json` — 네이밍, 슬로건, 스토리, 컬러 정보, 생성된 파일 목록
 - `color_palette.png` — 컬러 팔레트 시각화 이미지
 - `logo_01.png`, `logo_02.png`, `logo_03.png` — AI가 생성한 로고 시안
+
+
