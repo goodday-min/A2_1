@@ -378,7 +378,8 @@ python --version
 ```
 
 `Python 3.9` 이상이면 정상입니다. 
-설치되어 있지 않다면 [python.org](https://www.python.org/downloads/)에서 설치 파일을 내려받아 설치하세요. (Windows는 설치 시 **"Add Python to PATH"** 체크 필수)
+설치되어 있지 않다면 [python.org](https://www.python.org/downloads/)에서 설치 파일을 내려받아 설치하세요.   
+(Windows는 설치 시 **"Add Python to PATH"** 체크 필수)
 
 ### STEP 2. 프로젝트 폴더로 이동
 
