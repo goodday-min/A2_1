@@ -71,7 +71,7 @@ main (보호 브랜치, 항상 동작하는 상태 유지)
  └─ feature/result-doc    (E)
 ```
 
-각자 브랜치에서 작업 → PR(Pull Request) → 최소 1명 리뷰 후 `main`에 merge하는 방식.
+> 각자 브랜치에서 작업 → PR(Pull Request) → 최소 1명 리뷰 후 `main`에 merge하는 방식.
 
 
 ## 📌 요구사항 정의
