@@ -43,6 +43,37 @@
 | 3 | 생성된 컬러 팔레트를 시각화하여 이미지로 저장하는 방법을 설명할 수 있다 | `palette_visualizer.py`가 matplotlib `Rectangle`로 색상 블록을 그리고, 배경 밝기를 계산해 텍스트 색을 자동으로 흑/백 전환하는 로직까지 포함 (§6 참고) |
 | 4 | API 호출 시 발생할 수 있는 오류 상황과 대응 방법을 설명할 수 있다 | [에러 처리 가이드](#에러-처리-가이드) 표에 10가지 오류 유형과 실제 코드 대응을 정리. 개발 과정에서 실제로 겪은 오류까지 포함 |
 
+
+
+## 📌 팀 프로젝트 역할 분담 
+
+### ✅ 역할 분담표
+
+| 역할 | 담당 파일 | 주요 작업 | 필요 역량 |
+|---|---|---|---|
+| **A(민미경). / 파이프라인 통합** | `main.py`, `modules/config.py`, `modules/brief_loader.py` | CLI 입출력 흐름, API 키 관리, 브리프 검증, 전체 모듈 연결·통합 테스트, 최종 실행 확인 | 프로젝트 구조 이해, 통합 디버깅 |
+| **B(김재민). 텍스트 생성① (네이밍·슬로건)** | `text_generator.py` 中 `generate_naming()`, `generate_slogans()` | 프롬프트 엔지니어링, JSON 스키마 설계, 15자 제약 등 출력 형식 튜닝 | 프롬프트 작성 감각 |
+| **C(손애희). 텍스트 생성② (스토리·컬러) + 시각화** | `text_generator.py` 中 `generate_story()`, `generate_color_palette()`, `palette_visualizer.py` | 스토리 프롬프트, 컬러 팔레트 추천 프롬프트, matplotlib 시각화(한글 폰트 처리 포함) | 프롬프트 + matplotlib |
+| **D(이미영). 이미지 생성** | `image_generator.py` | 로고 프롬프트 설계, `gpt-image-1` 호출, 에러 처리(인증/네트워크/한도) | API 에러 핸들링 |
+| **E(류정민). 결과 저장 · 문서 · QA** | `result_saver.py`, `README.md`, 테스트용 브리프 | JSON 저장 로직, README 작성/관리, 다양한 브리프로 테스트, 발표자료 | 문서화, 꼼꼼함 |
+
+> `text_generator.py`는 함수가 4개라 B/C 둘이 나눠 맡습니다. 같은 파일이므로 **병합 전
+> 서로 diff를 꼭 공유**할 것.
+
+### ✅ Git 브랜치 전략
+
+```
+main (보호 브랜치, 항상 동작하는 상태 유지)
+ ├─ feature/pipeline      (A)
+ ├─ feature/naming-slogan (B)
+ ├─ feature/story-palette (C)
+ ├─ feature/logo          (D)
+ └─ feature/result-doc    (E)
+```
+
+각자 브랜치에서 작업 → PR(Pull Request) → 최소 1명 리뷰 후 `main`에 merge하는 방식.
+
+
 ## 📌 요구사항 정의
 
 ### ✅ 최종 결과물
