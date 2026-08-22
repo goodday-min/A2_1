@@ -131,7 +131,40 @@
 > OpenAI는 텍스트(GPT)와 이미지(gpt-image-1) 모두 동일 `OPENAI_API_KEY` 하나로 호출 가능합니다.
 > 이 프로젝트가 `.env`에 키를 1개만 요구하는 것은 이 때문입니다.
 
-### 3. 입력 스펙 — 브랜드 브리프
+
+
+### 3. 핵심 라이브러리
+
+#### 🛠️ 외부 라이브러리 (`requirements.txt`)
+
+| 라이브러리 | 버전 | 용도 | 사용 위치 |
+|---|---|---|---|
+| `openai` | `>=1.30.0` | OpenAI 공식 SDK. Chat Completions API로 `gpt-4o-mini` 텍스트 생성(네이밍/슬로건/스토리/컬러), Images API로 `gpt-image-1` 로고 이미지 생성을 모두 이 하나의 SDK로 호출 | `modules/text_generator.py`, `modules/image_generator.py` |
+| `python-dotenv` | `>=1.0.0` | `.env` 파일을 읽어 `OPENAI_API_KEY`를 환경변수로 자동 등록. API 키를 코드에서 완전히 분리하기 위한 핵심 라이브러리 (요구사항 10번) | `modules/config.py` |
+| `matplotlib` | `>=3.7.0` | 컬러 팔레트를 `Rectangle` 도형으로 그려 PNG로 저장. `font_manager`로 OS별 한글 폰트를 자동 탐색/등록하는 로직도 이 라이브러리 기반 | `modules/palette_visualizer.py` |
+| `requests` | `>=2.31.0` | 이미지 생성 API가 `url` 형식으로 응답할 경우 이미지를 다운로드하기 위한 HTTP 클라이언트 (기본 응답은 `b64_json`이라 실제로는 예비 경로) | `modules/image_generator.py` |
+
+> ⚠️ 이전 버전의 `requirements.txt`에 있던 `Pillow`는 실제 코드 어디에서도 import되지 않아
+> 제거했습니다. matplotlib이 이미지 저장을 자체적으로 처리하므로 별도의 이미지 후처리
+> 라이브러리가 필요하지 않습니다.
+
+#### 🛠️ 파이썬 표준 라이브러리
+
+이 프로젝트는 별도 설치 없이 파이썬에 기본 내장된 모듈도 적극 활용합니다.
+
+| 모듈 | 용도 | 사용 위치 |
+|---|---|---|
+| `os` | 파일/폴더 존재 확인, 경로 조합(`os.path.join`), 출력 폴더 생성(`os.makedirs`) | 거의 모든 모듈 |
+| `sys` | API 키 누락, 브리프 오류 등 치명적 상황에서 `sys.exit()`로 프로그램 종료 | `main.py`, `modules/config.py` |
+| `json` | 브리프 파일 파싱, LLM의 JSON 응답 파싱, 최종 결과(`brand_result.json`) 저장 | `modules/brief_loader.py`, `modules/text_generator.py`, `modules/result_saver.py` |
+| `base64` | 이미지 생성 API가 반환하는 `b64_json` 문자열을 실제 PNG 바이트로 디코딩 | `modules/image_generator.py` |
+| `datetime` | 결과 생성 시각(`generated_at`)을 ISO 8601 형식으로 기록 | `modules/result_saver.py` |
+
+
+
+
+
+### 4. 입력 스펙 — 브랜드 브리프
 
 | 필드 | 필수 | 타입 | 설명 | 예시 |
 |---|---|---|---|---|
@@ -160,7 +193,7 @@
 없으면 빈 문자열로 기본값을 채워 이후 로직에서 `KeyError` 없이 안전하게 동작하도록 합니다.
 
 
-### 4. 출력 스펙 — 결과 파일
+### 5. 출력 스펙 — 결과 파일
 
 ```
 output/
