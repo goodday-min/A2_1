@@ -8,7 +8,7 @@ venv/
 .venv/
 
 # 생성된 결과물 (필요 시 주석 처리하여 커밋 가능)
-output/
+# output/
 
 # OS/IDE 파일
 .DS_Store
