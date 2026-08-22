@@ -65,7 +65,7 @@ def save_palette_image(color_result: dict, output_dir: str,
             ax.add_patch(plt.Rectangle((i, 0), 1, 1, color=hex_code))
             label = f"{name}\n{hex_code}" if name else hex_code
             # 밝은 색 배경엔 검정 글씨, 어두운 색 배경엔 흰 글씨
-            text_color = "black" if _is_light_color(hex_code) else "white"
+            text_color = "black" if is_light_color(hex_code) else "white"
             ax.text(i + 0.5, 0.5, label, ha="center", va="center",
                      fontsize=10, color=text_color, weight="bold")
 
@@ -86,8 +86,12 @@ def save_palette_image(color_result: dict, output_dir: str,
         return None
 
 
-def _is_light_color(hex_code: str) -> bool:
-    """HEX 색상의 밝기를 계산해 밝은 색인지 판단 (텍스트 색상 자동 결정용)"""
+def is_light_color(hex_code: str) -> bool:
+    """
+    HEX 색상의 밝기를 계산해 밝은 색인지 판단한다 (텍스트 색상 자동 결정용).
+    palette_visualizer.py뿐 아니라 image_generator.py의 플레이스홀더 로고 생성에서도
+    동일한 로직을 재사용하기 위해 공개(public) 함수로 둔다.
+    """
     try:
         hex_code = hex_code.lstrip("#")
         r, g, b = int(hex_code[0:2], 16), int(hex_code[2:4], 16), int(hex_code[4:6], 16)

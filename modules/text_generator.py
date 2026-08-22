@@ -4,11 +4,13 @@ text_generator.py
 OpenAI GPT API를 호출하여 브랜드 네이밍, 슬로건, 스토리, 컬러 팔레트(텍스트 정보)를 생성한다.
 
 요구사항 9번(에러 처리)에 따라 각 함수는 API 호출이 실패해도 예외를 던져서 전체 프로그램을
-멈추게 하지 않는다. 대신 에러 메시지를 출력하고 None 을 반환하여, 호출부(main.py)가
-다음 단계로 계속 진행할 수 있도록 한다.
+멈추게 하지 않는다. 대신 에러 메시지를 콘솔에 출력하고, 실패 정보를 errors 리스트에 구조화된
+형태로 기록한 뒤 None을 반환하여, 호출부(main.py)가 다음 단계로 계속 진행할 수 있도록 한다.
+이 errors 리스트는 최종적으로 brand_result.json에 함께 저장된다.
 """
 
 import json
+from datetime import datetime
 from openai import OpenAI, APIError, APIConnectionError, AuthenticationError, RateLimitError
 
 TEXT_MODEL = "gpt-4o-mini"
@@ -48,24 +50,44 @@ def _call_json(client: OpenAI, system_prompt: str, user_prompt: str) -> dict:
     return json.loads(content)
 
 
-def _handle_api_error(step_name: str, error: Exception):
-    """API 오류 종류에 따라 사용자에게 보여줄 안내 메시지를 출력한다."""
+def _handle_api_error(step_name: str, error: Exception, errors: list) -> None:
+    """
+    API 오류 종류에 따라 사용자에게 보여줄 안내 메시지를 콘솔에 출력하고,
+    동시에 errors 리스트에 구조화된 오류 기록을 추가한다.
+    (errors 리스트는 main.py에서 생성되어 각 생성 함수에 공유되며,
+     최종적으로 result_saver.py를 통해 brand_result.json의 "errors" 필드에 저장된다.)
+    """
     if isinstance(error, AuthenticationError):
-        print(f"      - [{step_name} 실패] API 키 인증에 실패했습니다. OPENAI_API_KEY 값을 확인해주세요.")
+        error_type = "AuthenticationError"
+        message = "API 키 인증에 실패했습니다. OPENAI_API_KEY 값을 확인해주세요."
     elif isinstance(error, RateLimitError):
-        print(f"      - [{step_name} 실패] API 요청 한도(rate limit)를 초과했습니다. 잠시 후 다시 시도해주세요.")
+        error_type = "RateLimitError"
+        message = "API 요청 한도(rate limit)를 초과했습니다. 잠시 후 다시 시도해주세요."
     elif isinstance(error, APIConnectionError):
-        print(f"      - [{step_name} 실패] 네트워크 연결에 실패했습니다. 인터넷 연결 상태를 확인해주세요.")
+        error_type = "APIConnectionError"
+        message = "네트워크 연결에 실패했습니다. 인터넷 연결 상태를 확인해주세요."
     elif isinstance(error, APIError):
-        print(f"      - [{step_name} 실패] OpenAI API 오류가 발생했습니다: {error}")
+        error_type = "APIError"
+        message = f"OpenAI API 오류가 발생했습니다: {error}"
     elif isinstance(error, json.JSONDecodeError):
-        print(f"      - [{step_name} 실패] AI 응답을 JSON으로 해석하지 못했습니다: {error}")
+        error_type = "JSONDecodeError"
+        message = f"AI 응답을 JSON으로 해석하지 못했습니다: {error}"
     else:
-        print(f"      - [{step_name} 실패] 예상치 못한 오류가 발생했습니다: {error}")
+        error_type = type(error).__name__
+        message = f"예상치 못한 오류가 발생했습니다: {error}"
+
+    print(f"      - [{step_name} 실패] {message}")
     print(f"        -> {step_name} 단계를 건너뛰고 다음 단계를 계속 진행합니다.")
 
+    errors.append({
+        "step": step_name,
+        "error_type": error_type,
+        "message": message,
+        "occurred_at": datetime.now().isoformat(timespec="seconds"),
+    })
 
-def generate_naming(client: OpenAI, brief: dict) -> list | None:
+
+def generate_naming(client: OpenAI, brief: dict, errors: list) -> list | None:
     """브랜드명 후보 3~5개와 각 이름의 의미/유래를 생성한다."""
     system_prompt = (
         "당신은 전문 브랜드 네이밍 컨설턴트입니다. 반드시 JSON 객체로만 응답하세요."
@@ -87,11 +109,11 @@ def generate_naming(client: OpenAI, brief: dict) -> list | None:
         result = _call_json(client, system_prompt, user_prompt)
         return result.get("names", [])
     except Exception as e:
-        _handle_api_error("브랜드 네이밍 생성", e)
+        _handle_api_error("브랜드 네이밍 생성", e, errors)
         return None
 
 
-def generate_slogans(client: OpenAI, brief: dict) -> list | None:
+def generate_slogans(client: OpenAI, brief: dict, errors: list) -> list | None:
     """슬로건/태그라인 3개를 생성한다."""
     system_prompt = (
         "당신은 전문 카피라이터입니다. 반드시 JSON 객체로만 응답하세요."
@@ -105,11 +127,11 @@ def generate_slogans(client: OpenAI, brief: dict) -> list | None:
         result = _call_json(client, system_prompt, user_prompt)
         return result.get("slogans", [])
     except Exception as e:
-        _handle_api_error("슬로건 생성", e)
+        _handle_api_error("슬로건 생성", e, errors)
         return None
 
 
-def generate_story(client: OpenAI, brief: dict) -> str | None:
+def generate_story(client: OpenAI, brief: dict, errors: list) -> str | None:
     """브랜드 스토리(300자 내외, 탄생 배경/철학/비전)를 생성한다."""
     system_prompt = (
         "당신은 전문 브랜드 스토리텔러입니다. 반드시 JSON 객체로만 응답하세요."
@@ -124,11 +146,11 @@ def generate_story(client: OpenAI, brief: dict) -> str | None:
         result = _call_json(client, system_prompt, user_prompt)
         return result.get("story", "")
     except Exception as e:
-        _handle_api_error("브랜드 스토리 생성", e)
+        _handle_api_error("브랜드 스토리 생성", e, errors)
         return None
 
 
-def generate_color_palette(client: OpenAI, brief: dict) -> dict | None:
+def generate_color_palette(client: OpenAI, brief: dict, errors: list) -> dict | None:
     """메인 컬러 1개, 서브 컬러 2~3개를 HEX 코드로 추천받는다."""
     system_prompt = (
         "당신은 전문 브랜드 컬러 디자이너입니다. 반드시 JSON 객체로만 응답하세요. "
@@ -147,5 +169,5 @@ def generate_color_palette(client: OpenAI, brief: dict) -> dict | None:
         result = _call_json(client, system_prompt, user_prompt)
         return result
     except Exception as e:
-        _handle_api_error("컬러 팔레트 생성", e)
+        _handle_api_error("컬러 팔레트 생성", e, errors)
         return None

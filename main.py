@@ -13,14 +13,15 @@ AI 브랜드 디자인 생성기 - CLI 진입점
     4. [2/5] OpenAI GPT API로 슬로건을 생성한다.
     5. [3/5] OpenAI GPT API로 브랜드 스토리를 생성한다.
     6. [4/5] OpenAI GPT API로 컬러 팔레트를 생성하고 시각화하여 저장한다.
-    7. [5/5] OpenAI DALL-E API로 로고 시안을 생성한다.
-    8. 모든 결과를 output 폴더에 저장한다.
+    7. [5/5] OpenAI gpt-image-1 API로 로고 시안을 생성한다.
+    8. 모든 결과(성공한 항목 + 단계별 실패 기록)를 output 폴더에 저장한다.
 
 출력 형식은 '실행 결과 예시' 문서를 기준으로 맞춰져 있다 (단계 번호, 들여쓰기, 요약 출력).
 """
 
 import os
 import sys
+from datetime import datetime
 
 from openai import OpenAI
 
@@ -123,38 +124,50 @@ def main():
 
     os.makedirs(output_dir, exist_ok=True)
 
+    # 각 단계의 실패 정보를 모아두는 리스트 (최종적으로 brand_result.json의 "errors" 필드에 저장됨)
+    errors = []
+
     # [1/5] 브랜드 네이밍 생성
     print(f"    [1/{TOTAL_STEPS}] 브랜드 네이밍 생성 중...")
-    naming = generate_naming(client, brief)
+    naming = generate_naming(client, brief, errors)
     print_naming_result(naming)
 
     # [2/5] 슬로건 생성
     print(f"    [2/{TOTAL_STEPS}] 슬로건 생성 중...")
-    slogans = generate_slogans(client, brief)
+    slogans = generate_slogans(client, brief, errors)
     print_slogans_result(slogans)
 
     # [3/5] 브랜드 스토리 생성
     print(f"    [3/{TOTAL_STEPS}] 브랜드 스토리 생성 중...")
-    story = generate_story(client, brief)
+    story = generate_story(client, brief, errors)
     print_story_result(story)
 
     # [4/5] 컬러 팔레트 생성 + 시각화 저장
     print(f"    [4/{TOTAL_STEPS}] 컬러 팔레트 생성 중...")
-    colors = generate_color_palette(client, brief)
+    colors = generate_color_palette(client, brief, errors)
     print_color_result(colors)
     if colors:
         palette_path = save_palette_image(colors, output_dir)
         if palette_path:
             print(f"      - 저장: {palette_path}")
+        else:
+            errors.append({
+                "step": "컬러 팔레트 이미지 저장",
+                "error_type": "PaletteImageError",
+                "message": "컬러 팔레트 PNG 저장에 실패했습니다.",
+                "occurred_at": datetime.now().isoformat(timespec="seconds"),
+            })
 
-    # [5/5] 로고 시안 생성 (DALL-E)
+    # [5/5] 로고 시안 생성 (gpt-image-1)
     print(f"    [5/{TOTAL_STEPS}] 로고 시안 생성 중...")
-    logo_paths = generate_logos(client, brief, naming, colors, output_dir)
+    logo_paths = generate_logos(client, brief, naming, colors, output_dir, errors)
 
-    # 최종 JSON 결과 저장
-    save_json_result(brief, naming, slogans, story, colors, logo_paths, output_dir)
+    # 최종 JSON 결과 저장 (성공한 결과 + 단계별 실패 기록 모두 포함)
+    save_json_result(brief, naming, slogans, story, colors, logo_paths, output_dir, errors)
 
     print()
+    if errors:
+        print(f"    ⚠️  일부 단계가 실패했습니다 ({len(errors)}건). brand_result.json의 \"errors\" 필드를 확인하세요.")
     print(f"    ✅ 완료! {output_dir}/ 폴더를 확인하세요.")
 
 

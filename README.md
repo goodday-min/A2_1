@@ -102,9 +102,9 @@ main (보호 브랜치, 항상 동작하는 상태 유지)
 | 4 | 슬로건 생성 | LLM API로 톤앤매너에 맞는 슬로건/태그라인 3개 생성 | `modules/text_generator.py: generate_slogans()` |
 | 5 | 브랜드 스토리 생성 | LLM API로 탄생 배경/철학/비전을 포함한 300자 내외 스토리 생성 | `modules/text_generator.py: generate_story()` |
 | 6 | 컬러 팔레트 생성 | LLM API로 메인 컬러 1개 + 서브 컬러 2~3개(HEX) 추천, matplotlib으로 시각화하여 PNG 저장 | `modules/text_generator.py: generate_color_palette()`, `modules/palette_visualizer.py` |
-| 7 | 로고 시안 생성 | 이미지 생성 API(`gpt-image-1`)로 로고 시안 3개 생성 후 PNG 저장 | `modules/image_generator.py` |
-| 8 | 결과 저장 | 텍스트 결과는 `brand_result.json`, 이미지는 개별 PNG 파일로 출력 폴더에 저장 | `modules/result_saver.py` |
-| 9 | 에러 처리 | API 호출 실패 시 에러 메시지 출력 후 다음 단계 계속 진행 / API 키 오류 시 명확한 안내 메시지 출력 | `modules/config.py`, 각 생성 모듈의 `try/except` |
+| 7 | 로고 시안 생성 | 이미지 생성 API(`gpt-image-1`)로 로고 시안 3개 생성 후 PNG 저장. 일시적 오류는 재시도, 그래도 실패하면 플레이스홀더 이미지로 대체해 항상 2~3개를 확보 | `modules/image_generator.py` |
+| 8 | 결과 저장 | 텍스트 결과는 `brand_result.json`, 이미지는 개별 PNG 파일로 출력 폴더에 저장. 단계별 실패 기록도 `errors` 필드에 함께 저장 | `modules/result_saver.py` |
+| 9 | 에러 처리 | API 호출 실패 시 에러 메시지 출력 후 다음 단계 계속 진행 / API 키 오류 시 명확한 안내 메시지 출력 / 실패 정보를 `errors` 리스트로 수집해 결과 JSON에 기록 | `modules/config.py`, 각 생성 모듈의 `try/except`, `main.py`의 `errors` 리스트 |
 | 10 | API 키 관리 | API 키를 코드에 직접 작성하지 않고 `.env` 파일(환경변수)에서 읽어옴 | `modules/config.py`, `.env.example` |
 
 ## 📌 시스템 설계
@@ -253,9 +253,22 @@ output/
   "generated_files": {
     "color_palette_image": "color_palette.png",
     "logo_images": ["logo_01.png", "logo_02.png", "logo_03.png"]
-  }
+  },
+  "errors": [
+    {
+      "step": "슬로건 생성",
+      "error_type": "RateLimitError",
+      "message": "API 요청 한도(rate limit)를 초과했습니다. 잠시 후 다시 시도해주세요.",
+      "occurred_at": "2026-08-22T12:31:50"
+    }
+  ]
 }
 ```
+
+🔹 `errors`는 실패한 단계가 없으면 빈 배열(`[]`)로 저장됩니다. 각 항목은 `step`(어떤 단계인지),
+`error_type`(예외 클래스명), `message`(사용자에게 출력된 메시지와 동일한 설명),
+`occurred_at`(발생 시각)으로 구성되어, 결과 파일만 열어봐도 어떤 단계가 왜 실패했는지 사후에
+파악할 수 있습니다.
 
 ## 📌 프로젝트 파일 구조
 
@@ -335,14 +348,22 @@ OpenAI Chat Completions API를 호출합니다. 이는 [8.1 LLM에서 구조화�
 
 - `_build_logo_prompt()`: 네이밍 1순위 결과와 메인 컬러 HEX 코드를 영문 프롬프트에 삽입해
   텍스트 생성 결과가 로고 디자인에 반영되도록 합니다.
-- `generate_logos()`: `LOGO_COUNT`(기본 3)만큼 반복 호출하며, 파일명은 `logo_01.png`처럼
-  2자리 zero-padding으로 저장합니다.
+- `generate_logos()`: `LOGO_COUNT`(기본 3)만큼 반복하며, 파일명은 `logo_01.png`처럼 2자리
+  zero-padding으로 저장합니다. 각 로고는 아래 2단계 안전장치를 거쳐 **항상 파일이** 
+  **저장되도록** 설계되어 있습니다.
+  1. **재시도(`_generate_one_logo()`)**: `RateLimitError`/`APIConnectionError`/`APIError`처럼
+     시간이 지나면 성공할 가능성이 있는 "일시적" 오류는 지수 백오프(2초 → 4초)로
+     `RETRY_LIMIT`(기본 2)회까지 재시도합니다. 인증 오류(`AuthenticationError`)는 재시도해도
+     결과가 같으므로 즉시 실패 처리합니다.
+  2. **플레이스홀더(`_save_placeholder_logo()`)**: 재시도까지 모두 실패하면 matplotlib으로
+     브랜드명 첫 글자 + 메인 컬러를 담은 대체 이미지를 직접 그려 저장합니다. 이 덕분에
+     이미지 API가 완전히 다운되는 최악의 상황에서도 `logo_images`가 빈 배열로 남지 않고
+     요구사항(로고 2~3개 PNG)을 항상 충족합니다. 플레이스홀더 사용 여부는
+     `errors`에 `"error_type": "PlaceholderUsed"`로 별도 기록되어, 어떤 로고가 AI 생성인지
+     대체 이미지인지 결과 파일만으로 구분할 수 있습니다.
 - 이미지 API 응답은 SDK/모델 버전에 따라 `b64_json` 또는 `url` 둘 중 하나로 올 수 있어, 두
   경우를 모두 처리하도록 방어적으로 작성되어 있습니다 (`response_format` 파라미터는 일부
   모델/SDK 조합에서 지원되지 않으므로 아예 넘기지 않음 — §12 참고).
-- 인증 오류(`AuthenticationError`)는 이후 로고를 더 시도해봤자 계속 실패할 것이 확실하므로
-  루프를 즉시 `break`하지만, 요청 한도 초과나 네트워크 오류 등은 `continue`로 다음 로고를
-  계속 시도합니다. 이 구분이 불필요한 API 낭비를 막습니다.
 
 ###  `modules/palette_visualizer.py` — 컬러 팔레트 시각화
 
@@ -372,13 +393,22 @@ try:
 except Exception as e:
     print(f"실패: {e}")
 
-# 이 프로젝트의 방식 — 각 단계를 독립적으로 처리
-naming = generate_naming(client, brief)     # 내부에서 실패해도 None 반환
-slogans = generate_slogans(client, brief)   # naming 실패와 무관하게 계속 실행
-story = generate_story(client, brief)
-colors = generate_color_palette(client, brief)
-# → 4개 중 몇 개가 실패하든, 성공한 결과만으로 brand_result.json이 저장됨
+# 이 프로젝트의 방식 — 각 단계를 독립적으로 처리하고 실패는 errors 리스트에 기록
+errors = []
+naming = generate_naming(client, brief, errors)     # 실패해도 None 반환 + errors에 기록
+slogans = generate_slogans(client, brief, errors)   # naming 실패와 무관하게 계속 실행
+story = generate_story(client, brief, errors)
+colors = generate_color_palette(client, brief, errors)
+# → 4개 중 몇 개가 실패하든, 성공한 결과 + 실패 기록(errors)이 함께 brand_result.json에 저장됨
 ```
+
+🔹 **실패 기록까지 남기는 이유** — 단순히 실패해도 넘어가는 것만으로는 부족합니다. 나중에
+`brand_result.json` 파일만 열어봤을 때 "어떤 단계가 왜 실패했는지"를 알 수 없다면 디버깅이나
+재실행 판단이 불가능합니다. 그래서 이 프로젝트는 각 생성 함수에 `errors` 리스트를 공유
+전달하여, 실패 시 `_handle_api_error()`(텍스트 생성) / `_record_logo_error()`(이미지 생성)가
+`{"step": ..., "error_type": ..., "message": ..., "occurred_at": ...}` 형태로 기록을
+추가합니다. 이 리스트는 `main.py`에서 생성되어 모든 단계에 걸쳐 누적된 뒤,
+`result_saver.py`를 통해 최종 JSON의 `"errors"` 필드로 저장됩니다.
 
 ### ✅ 이중 안전망(dual safety net) 패턴
 
