@@ -711,7 +711,7 @@ $ python main.py
 
 | 입력 파일(json) |정상 실행 스크린샷| 결과물(파일저장) 스크린샷|
 |---|---|---|
-|<img width="300" height="198" alt="image" src="https://github.com/user-attachments/assets/cfef4d20-86cc-4196-8373-ea8fbdf041c2" />|<img width="600" height="660" alt="image" src="https://github.com/user-attachments/assets/a982952b-a745-411a-9dd8-b36d4d7cb68a" /><br><img width="600" height="422" alt="image" src="https://github.com/user-attachments/assets/a0d45e36-c070-4965-a370-44f0e1fc1810" />|<img width="300" height="215" alt="image" src="https://github.com/user-attachments/assets/5f745602-a1c4-4385-8a26-be1c7c6584a0" />|
+|<img width="300" height="198" alt="image" src="https://github.com/user-attachments/assets/cfef4d20-86cc-4196-8373-ea8fbdf041c2" />|<img width="523" height="638" alt="image" src="https://github.com/user-attachments/assets/4929f484-0559-45b4-87f9-a3b62624c77d" />|<img width="421" height="209" alt="image" src="https://github.com/user-attachments/assets/0a23697b-9f10-40c8-9ace-0c42d85b3101" />|
 
 > 실행이 끝나면 `output/` 폴더(또는 직접 지정한 폴더)에 아래 파일들이 생성됨
 
