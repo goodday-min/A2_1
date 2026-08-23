@@ -175,9 +175,6 @@ main (보호 브랜치, 항상 동작하는 상태 유지)
 | `matplotlib` | `>=3.7.0` | 컬러 팔레트를 `Rectangle` 도형으로 그려 PNG로 저장. `font_manager`로 OS별 한글 폰트를 자동 탐색/등록하는 로직도 이 라이브러리 기반 | `modules/palette_visualizer.py` |
 | `requests` | `>=2.31.0` | 이미지 생성 API가 `url` 형식으로 응답할 경우 이미지를 다운로드하기 위한 HTTP 클라이언트 (기본 응답은 `b64_json`이라 실제로는 예비 경로) | `modules/image_generator.py` |
 
-> ⚠️ 이전 버전의 `requirements.txt`에 있던 `Pillow`는 실제 코드 어디에서도 import되지 않아
-> 제거했습니다. matplotlib이 이미지 저장을 자체적으로 처리하므로 별도의 이미지 후처리
-> 라이브러리가 필요하지 않습니다.
 
 #### 🛠️ 파이썬 표준 라이브러리
 
