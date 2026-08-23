@@ -736,106 +736,116 @@ $ python main.py
 ## 📌 이 프로젝트로 배우는 것
 
 
-- ✅ **LLM API 사용법**: OpenAI/Claude 같은 AI로 텍스트 만들기
+- ✅ **LLM API 사용법**: OpenAI 같은 AI로 텍스트 만들기
 
-      OpenAI(ChatGPT)나 Anthropic(Claude) 같은 AI 서비스에 인터넷으로 질문을 보내고 답변을 받는 방법을 배움
-      
+      OpenAI(ChatGPT) 같은 AI 서비스에 인터넷으로 질문을 보내고 답변을 받는 방법을 배움
 
    📝 이 프로젝트에서 배우는 부분
 
             from openai import OpenAI
 
-            client = OpenAI(OPEN_AI_KEY)
+            client = OpenAI(api_key=api_key)
             response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": "브랜드 이름 3개 추천해줘"}]
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "브랜드 이름 3개 추천해줘"}]
             )
             print(response.choices[0].message.content)
 
-- ✅ **이미지 생성 AI**: DALL-E, GPT-IMAGE-1로 이미지 만들고 저장하기
+- ✅ **이미지 생성 AI**: gpt-image-1로 이미지 만들고 저장하기
 
-    텍스트 설명을 입력하면 그림을 그려주는 AI(DALL-E, GPT-IMAGE-1)를 사용하는 방법을 배움.
+    텍스트 설명을 입력하면 그림을 그려주는 AI를 사용하는 방법을 배움.
     텍스트뿐만 아니라 이미지도 자동으로 생성할 수 있게 되면, 만들 수 있는 서비스의 폭이 훨씬 넓어짐. (썸네일 자동 생성, 로고 제작, 일러스트 등)
 
+    > ⚠️ 기존 `dall-e-3` 모델은 2026년 5월 12일 OpenAI에서 완전히 폐지(retire)되어 더 이상
+    > 호출할 수 없습니다. 후속 모델인 `gpt-image-1`을 사용합니다.
+
       📝 이 프로젝트에서 배우는 부분
-      generators/logo.py에서 "친환경 화장품 브랜드의 미니멀한 로고" 같은 설명으로 로고 이미지 만들기
-      생성된 이미지 URL을 다운로드해서 PNG 파일로 저장하기
+      modules/image_generator.py에서 "친환경 화장품 브랜드의 미니멀한 로고" 같은 설명으로 로고 이미지 만들기
+      생성된 이미지를 디코딩/다운로드해서 PNG 파일로 저장하기
 
             response = client.images.generate(
-            model="gpt-image-1",
-            prompt="자연주의 화장품 브랜드의 미니멀한 로고, 초록색 계열",
-            size="1024x1024"
+                model="gpt-image-1",
+                prompt="자연주의 화장품 브랜드의 미니멀한 로고, 초록색 계열",
+                size="1024x1024",
+                n=1,
             )
-            image_url = response.data[0].url  # 이미지 주소 받기
-
+            data = response.data[0]
+            # gpt-image-1은 보통 b64_json으로 응답하지만, SDK/모델 버전에 따라
+            # url로 올 수도 있어 두 경우를 모두 처리하도록 작성함
+            if data.b64_json:
+                image_bytes = base64.b64decode(data.b64_json)
+            else:
+                image_bytes = requests.get(data.url).content
 
 - ✅ **JSON 형태로 답변 받기**: AI가 정해진 형식으로 대답하게 만들기
 
       📝 이 프로젝트에서 배우는 부분
       OpenAI의 response_format={"type": "json_object"} 옵션 사용하기
-      Pydantic으로 응답 형식이 올바른지 검사하기
+      직접 작성한 검증 함수로 응답 스키마가 올바른지 확인하기
+      스키마가 틀리면 "여기가 잘못됐다"고 모델에게 알려주고 다시 응답받는 재질문(clarification) 루프
 
             response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            response_format={"type": "json_object"},  # ← JSON 형식 강제!
-            messages=[...]
+                model="gpt-4o-mini",
+                response_format={"type": "json_object"},  # ← JSON 형식 강제!
+                messages=[...]
             )
             data = json.loads(response.choices[0].message.content)
             names = data["names"]  # 바로 사용 가능!
 
-- ✅ **프롬프트 작성법**: 원하는 결과를 얻는 질문 만드는 법
-
-      📝 이 프로젝트에서 배우는 부분
-      prompts/ 폴더에서 각 생성 작업별 프롬프트 템플릿 만들기
-      역할 부여, 조건 명시, 형식 지정, 예시 제공 기법 익히기
-
-            당신은 브랜드 네이밍 전문가입니다.
-            아래 조건에 맞는 브랜드 이름 5개를 제안해주세요.
-
-            - 업종: 친환경 화장품
-            - 타겟: 20~30대 여성
-            - 톤: 따뜻하고 신뢰감 있는
-            - 형식: JSON ({"names": [{"ko": "...", "en": "...", "meaning": "..."}]})
-
+            # 스키마 검증 예시 (text_generator.py의 실제 방식)
+            def _validate_naming(result):
+                names = result.get("names")
+                if not isinstance(names, list) or len(names) == 0:
+                    return False, "'names' 필드가 배열이 아니거나 비어 있습니다."
+                for item in names:
+                    if "name" not in item or "meaning" not in item:
+                        return False, "각 항목에 'name'과 'meaning'이 필요합니다."
+                return True, None
+            # 검증 실패 시, 문제를 구체적으로 지적하는 메시지를 이어붙여 최대 2회 재질문
 
 - ✅ **여러 작업 순서 관리**: 여러 API 호출을 차례대로 처리하기
 
       📝 이 프로젝트에서 배우는 부분
-      main.py에서 각 생성기(generator)를 순서대로 호출하기
-      이전 단계 결과를 다음 단계 입력으로 넘기기 (예: 이름 → 로고 프롬프트에 활용)
+      main.py에서 각 생성 함수를 순서대로 호출하기
+      이전 단계 결과를 다음 단계 입력으로 넘기기 (예: 이름 + 컬러 → 로고 프롬프트에 활용)
+      각 단계의 실패 정보를 errors 리스트에 모아 최종 결과에 함께 저장하기
 
-            def run_pipeline(brief):
-            result = {"brief": brief, "errors": []}
-            result["naming"] = generate_names(brief)
-            result["slogans"] = generate_slogans(brief, result["naming"])
-            result["story"] = generate_story(brief, result["naming"])
-            result["palette"] = generate_palette(brief)
-            result["logos"] = generate_logos(brief, result["naming"], result["palette"])
-            return result
+            errors = []
+            naming = generate_naming(client, brief, errors)
+            slogans = generate_slogans(client, brief, errors)
+            story = generate_story(client, brief, errors)
+            colors = generate_color_palette(client, brief, errors)
 
+            if colors:
+                save_palette_image(colors, output_dir)
 
+            # 로고는 네이밍 결과 + 메인 컬러를 프롬프트에 반영
+            logo_paths = generate_logos(client, brief, naming, colors, output_dir, errors)
+
+            save_json_result(brief, naming, slogans, story, colors, logo_paths, output_dir, errors)
 
 - ✅ **오류 대응**: 일부 실패해도 계속 진행되는 튼튼한 프로그램 만들기
+
       API 호출이 실패했을 때 프로그램이 죽지 않고, 다시 시도하거나 대체 방안을 실행하는 방법을 배움.
+      이 프로젝트는 실패 유형에 따라 두 가지 다른 대응 방식을 사용함.
 
       📝 이 프로젝트에서 배우는 부분
-      try-except로 각 생성 단계 감싸기
-      재시도 로직: 실패하면 잠시 기다렸다가 다시 시도 (최대 3회)
-      부분 실패 허용: 로고 생성이 실패해도 이름/슬로건은 저장
+      ① try-except로 각 생성 단계 감싸기 (하나 실패해도 나머지는 계속 진행)
+      ② 로고 이미지: 일시적 오류(요청 한도/네트워크/서버)는 지수 백오프로 최대 2회 재시도,
+         그래도 실패하면 matplotlib으로 그린 플레이스홀더 이미지로 대체 저장
+      ③ 텍스트 생성: 스키마 위반 시 재질문 최대 2회, 그래도 실패하면 해당 단계만 건너뛰기
+      ④ 부분 실패 허용: 로고 생성이 전부 실패해도 이름/슬로건/스토리/컬러는 정상 저장
 
             import time
 
-            def call_with_retry(func, max_retries=3):
-            for attempt in range(max_retries):
-                  try:
-                        return func()
-                  except Exception as e:
-                        if attempt == max_retries - 1:
-                        raise
-                        time.sleep(2 ** attempt)  # 2초, 4초, 8초 대기
-
-
-
+            for attempt in range(RETRY_LIMIT + 1):  # RETRY_LIMIT = 2 → 총 3회 시도
+                try:
+                    return client.images.generate(...)
+                except (RateLimitError, APIConnectionError, APIError):
+                    if attempt < RETRY_LIMIT:
+                        time.sleep(2 ** (attempt + 1))  # 2초, 4초 대기 후 재시도
+                    else:
+                        return save_placeholder_logo(...)  # 최종 대체 저장
 
 - ✅ **API 키 안전하게 다루기**: 환경변수로 비밀 정보 관리하기
 
@@ -843,61 +853,74 @@ $ python main.py
       .env 파일에 API 키 저장하기
       python-dotenv로 불러오기
       .gitignore에 .env 추가해서 GitHub 업로드 방지
+      키가 없거나 형식이 이상하면(예: 'sk-'로 시작 안 함) 명확한 안내 메시지 출력하기
 
             # .env 파일
             OPENAI_API_KEY=sk-proj-xxxxx
 
-            # 파이썬 코드
+            # 파이썬 코드 (modules/config.py)
             from dotenv import load_dotenv
-            import os
+            import os, sys
 
             load_dotenv()
-            api_key = os.getenv("OPENAI_API_KEY")  # 안전하게 불러오기
-
+            api_key = os.getenv("OPENAI_API_KEY", "").strip()
+            if not api_key:
+                print("OPENAI_API_KEY가 설정되어 있지 않습니다. .env 파일을 확인해주세요.")
+                sys.exit(1)
 
 - ✅ **색상 시각화**: matplotlib으로 색상 팔레트 그리기
 
-      AI가 알려준 색상 코드(예: #5D7B6F)를 실제 눈으로 볼 수 있는 이미지(PNG)로 만드는 방법을 배움. 
+      AI가 알려준 색상 코드(예: #5D7B6F)를 실제 눈으로 볼 수 있는 이미지(PNG)로 만드는 방법을 배움.
       "main": "#5D7B6F"라는 텍스트만 봐서는 어떤 색인지 모름. 팔레트 이미지로 만들어야 클라이언트가 "아, 이런 느낌이구나!" 하고 이해할 수 있음.
 
       📝 이 프로젝트에서 배우는 부분
       matplotlib으로 색상 사각형 그리기
-      HEX 코드(#5D7B6F)를 색상으로 변환하기
-      PNG 파일로 저장하기
+      배경 밝기를 계산해서 텍스트 색을 흑/백으로 자동 전환하기 (밝은 배경엔 검은 글씨)
+      OS별 한글 폰트를 자동 탐색/등록해서 한글 라벨이 깨지지 않게 하기
+      PNG 파일로 저장하기 (color_palette.png)
 
             import matplotlib.pyplot as plt
 
             colors = ["#5D7B6F", "#E8DFCA", "#A8B5A0"]
             fig, ax = plt.subplots(figsize=(len(colors) * 2, 3))
             for i, color in enumerate(colors):
-            ax.add_patch(plt.Rectangle((i, 0), 1, 1, color=color))
+                ax.add_patch(plt.Rectangle((i, 0), 1, 1, color=color))
+                ax.text(i + 0.5, 0.5, color, ha="center", va="center")
             ax.set_xlim(0, len(colors))
-            plt.savefig("output/palette.png")
+            plt.savefig("output/color_palette.png", dpi=150, bbox_inches="tight")
 
-- ✅ **CLI 만들기**: 명령어로 실행하는 프로그램 설계
+- ✅ **CLI 만들기**: 명령어로 실행하는 대화형 프로그램 설계
 
-            python main.py --input brief.json --output ./output
+      이 프로젝트는 argparse 같은 명령줄 옵션(--brief, --output) 방식이 아니라,
+      input()을 사용한 완전 대화형(interactive) CLI로 만들어져 있음.
+      실행하면 프로그램이 먼저 질문을 하고, 사용자가 값을 입력하면 그 값으로 실행되는 방식.
 
-      이렇게 명령어 하나로 실행되는 도구는 파이썬 표준 라이브러리인 **argparse**를 사용
+            $ python main.py
 
-            import argparse
+      📝 이 프로젝트에서 배우는 부분
+      input()으로 사용자 입력 받기 (필수 값은 빈 입력이면 다시 물어보는 재입력 루프)
+      선택 입력은 엔터만 치면 기본값(./output)을 사용하도록 처리하기
 
-            parser = argparse.ArgumentParser(description="브랜드 아이덴티티 생성기")
-            parser.add_argument("--brief", required=True, help="입력 브리프 JSON 파일 경로")
-            parser.add_argument("--output", default="output", help="결과물 저장 폴더")
-            parser.add_argument("--with-competitor", action="store_true", help="경쟁사 분석 포함")
+            # main.py의 실제 방식
+            def get_user_input():
+                brief_path = input("    브리프 파일 경로를 입력하세요: ").strip()
+                while not brief_path:
+                    print("    브리프 파일 경로는 필수 입력값입니다.")
+                    brief_path = input("    브리프 파일 경로를 입력하세요: ").strip()
 
-            args = parser.parse_args()
-            print(args.brief)  # 사용자가 입력한 값 사용
+                output_dir = input("    출력 폴더 경로를 입력하세요 (엔터 시 ./output): ").strip()
+                if not output_dir:
+                    output_dir = "./output"
+
+                return brief_path, output_dir
 
       💻 우리 프로젝트에서 어떻게 쓰이나요?
-      main.py의 CLI 구조를 다시 볼까요?
 
-      #### 최소 실행 (필수 옵션만)
-      python main.py --brief brief.json
+            $ python main.py
+            브리프 파일 경로를 입력하세요: brief.json
+            출력 폴더 경로를 입력하세요 (엔터 시 ./output):
 
-      #### 결과 폴더 지정
-      python main.py --brief brief.json --output my_brands/
+
 
 
 
