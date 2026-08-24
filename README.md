@@ -671,7 +671,7 @@ source venv/bin/activate
 python3 main.py
 
 # 3) 안내에 따라 입력
-브리프 파일 경로를 입력하세요: sample_brief.json
+브리프 파일 경로를 입력하세요: brief.json
 출력 폴더 경로를 입력하세요 (엔터 시 ./output):
 ```
 
