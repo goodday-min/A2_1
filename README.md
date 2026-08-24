@@ -92,7 +92,7 @@ main (보호 브랜치, 항상 동작하는 상태 유지)
    - 컬러 팔레트를 시각화하여 PNG 이미지로 저장 (`color_palette.png`)
    - 로고 시안을 PNG 이미지로 저장 (`logo_01.png` ~ `logo_03.png`)
 
-### ✅ 기능 요구사항 상세
+### ✅ 기능요구사항 상세
 
 | # | 항목 | 상세 내용 | 구현 위치 |
 |---|---|---|---|
@@ -105,7 +105,9 @@ main (보호 브랜치, 항상 동작하는 상태 유지)
 | 7 | 로고 시안 생성 | 이미지 생성 API(`gpt-image-1`)로 로고 시안 3개 생성 후 PNG 저장. 일시적 오류는 재시도, 그래도 실패하면 플레이스홀더 이미지로 대체해 항상 2~3개를 확보 | `modules/image_generator.py` |
 | 8 | 결과 저장 | 텍스트 결과는 `brand_result.json`, 이미지는 개별 PNG 파일로 출력 폴더에 저장. 단계별 실패 기록도 `errors` 필드에 함께 저장 | `modules/result_saver.py` |
 | 9 | 에러 처리 | API 호출 실패 시 에러 메시지 출력 후 다음 단계 계속 진행 / API 키 오류 시 명확한 안내 메시지 출력 / 실패 정보를 `errors` 리스트로 수집해 결과 JSON에 기록 | `modules/config.py`, 각 생성 모듈의 `try/except`, `main.py`의 `errors` 리스트 |
-| 10 | API 키 관리 | API 키를 코드에 직접 작성하지 않고 `.env` 파일(환경변수)에서 읽어옴 | `modules/config.py`, `.env.example` |
+| 10 | API 키 관리 | API 키를 코드에 직접 작성하지 않고 `.env` 파일(환경변수)에서 읽어옴 | `modules/config.py` |
+
+> `.env` 파일은 로컬에서 직접 생성하는 실제 키 파일이며, Git에는 커밋되지 않습니다(`.gitignore`에 등록). 별도의 `.env.example` 템플릿 파일은 이 프로젝트에 포함되어 있지 않습니다.
 
 ## 📌 시스템 설계
 
@@ -172,6 +174,7 @@ main (보호 브랜치, 항상 동작하는 상태 유지)
 | `openai` | `>=1.30.0` | OpenAI 공식 SDK. Chat Completions API로 `gpt-4o-mini` 텍스트 생성(네이밍/슬로건/스토리/컬러), Images API로 `gpt-image-1` 로고 이미지 생성을 모두 이 하나의 SDK로 호출 | `modules/text_generator.py`, `modules/image_generator.py` |
 | `python-dotenv` | `>=1.0.0` | `.env` 파일을 읽어 `OPENAI_API_KEY`를 환경변수로 자동 등록. API 키를 코드에서 완전히 분리하기 위한 핵심 라이브러리 (요구사항 10번) | `modules/config.py` |
 | `matplotlib` | `>=3.7.0` | 컬러 팔레트를 `Rectangle` 도형으로 그려 PNG로 저장. `font_manager`로 OS별 한글 폰트를 자동 탐색/등록하는 로직도 이 라이브러리 기반 | `modules/palette_visualizer.py` |
+| `Pillow` | `>=10.0.0` | `requirements.txt`에 명시되어 있으나, 현재 코드베이스에서는 `PIL`/`Image`를 import하는 곳이 없어 실제로는 사용되지 않는 의존성임 (matplotlib이 내부적으로 의존할 수 있어 남아있을 뿐, 직접 호출 코드는 없음) | — (미사용) |
 | `requests` | `>=2.31.0` | 이미지 생성 API가 `url` 형식으로 응답할 경우 이미지를 다운로드하기 위한 HTTP 클라이언트 (기본 응답은 `b64_json`이라 실제로는 예비 경로) | `modules/image_generator.py` |
 
 
@@ -318,7 +321,7 @@ brand-ai-generator/
 ### `modules/text_generator.py` — 텍스트 브랜드 요소 생성
 
 4개의 생성 함수(`generate_naming`, `generate_slogans`, `generate_story`, `generate_color_palette`)가
-모두 공통 헬퍼 `_call_json()`을 통해 `response_format={"type": "json_object"}` 옵션으로
+모두 공통 헬퍼 `_call_json_with_clarification()`을 통해 `response_format={"type": "json_object"}` 옵션으로
 OpenAI Chat Completions API를 호출. LLM이 설명 문장을 덧붙이지 않고 순수 JSON만 반환하도록 강제함.
 
 💡 **프롬프트 설계 원칙** (실제 코드에 적용된 5가지):  
@@ -363,9 +366,10 @@ OpenAI Chat Completions API를 호출. LLM이 설명 문장을 덧붙이지 않�
 - `_set_korean_font()`: OS별 한글 폰트(Windows `Malgun Gothic`, macOS `AppleGothic`,
   Linux `NanumGothic`/`Noto Sans CJK KR`)를 자동 탐색해 matplotlib에 등록. 이 처리가
   없으면 한글 라벨이 네모(□)로 깨져 보임.
-- `save_palette_image()`: 메인 컬러 + 서브 컬러를 `Rectangle`로 그리고, `_is_light_color()`로
+- `save_palette_image()`: 메인 컬러 + 서브 컬러를 `Rectangle`로 그리고, `is_light_color()`로
   각 색상의 밝기(YIQ 공식 기반)를 계산해 텍스트 색을 흑/백으로 자동 전환함 — 밝은 색
-  배경에 흰 글씨, 어두운 색 배경에 검은 글씨가 겹쳐 안 보이는 문제를 방지함.  
+  배경에 흰 글씨, 어두운 색 배경에 검은 글씨가 겹쳐 안 보이는 문제를 방지함. (`is_light_color()`는
+  `image_generator.py`의 플레이스홀더 로고에서도 재사용되는 공개 함수임)
 
 ### `modules/result_saver.py` — 최종 결과 저장
 
@@ -398,7 +402,7 @@ colors = generate_color_palette(client, brief, errors)
 🔹 **실패 기록까지 남기는 이유** — 단순히 실패해도 넘어가는 것만으로는 부족함. 나중에
 `brand_result.json` 파일만 열어봤을 때 "어떤 단계가 왜 실패했는지"를 알 수 없다면 디버깅이나
 재실행 판단이 불가능. 그래서 이 프로젝트는 각 생성 함수에 `errors` 리스트를 공유
-전달하여, 실패 시 `_handle_api_error()`(텍스트 생성) / `_record_logo_error()`(이미지 생성)가
+전달하여, 실패 시 `_handle_api_error()`(텍스트 생성) / `_record_error()`(이미지 생성)가
 `{"step": ..., "error_type": ..., "message": ..., "occurred_at": ...}` 형태로 기록을
 추가. 이 리스트는 `main.py`에서 생성되어 모든 단계에 걸쳐 누적된 뒤,
 `result_saver.py`를 통해 최종 JSON의 `"errors"` 필드로 저장.
@@ -429,7 +433,7 @@ colors = generate_color_palette(client, brief, errors)
 | 오류 상황 | 발생 원인 | 프로그램의 대응 | 사용자가 해야 할 일 |
 |---|---|---|---|
 | **API 키 누락** (`OPENAI_API_KEY` 없음) | `.env` 파일을 만들지 않았거나 환경변수 미설정 | 프로그램 시작 직후 감지하여 안내 메시지 출력 후 **즉시 종료** (`sys.exit(1)`) | `.env` 파일에 `OPENAI_API_KEY=sk-...` 추가 |
-| **API 키 인증 실패** (`AuthenticationError`) | 키 값이 잘못되었거나 만료/폐기됨 | 해당 단계에서 에러 메시지 출력 후 **해당 단계만 건너뛰고 다음 단계 진행** (로고는 이후 시도 전체를 중단) | OpenAI 대시보드에서 키 상태 확인, 새 키 발급 후 `.env` 갱신 |
+| **API 키 인증 실패** (`AuthenticationError`) | 키 값이 잘못되었거나 만료/폐기됨 | 해당 단계에서 에러 메시지 출력 후 **해당 단계만 건너뛰고 다음 단계 진행** (로고 시안의 경우, `generate_logos()`는 인증 오류가 나도 루프를 중단하지 않고 남은 로고마다 동일하게 실패 처리한 뒤 각각 플레이스홀더 이미지로 대체 저장함) | OpenAI 대시보드에서 키 상태 확인, 새 키 발급 후 `.env` 갱신 |
 | **API 요청 한도 초과** (`RateLimitError`) | 짧은 시간에 너무 많은 요청, 또는 사용량/결제 한도 초과 | 에러 메시지 출력 후 해당 단계를 건너뛰고 계속 진행 | 잠시 후 재실행, 또는 OpenAI 결제 정보/한도 확인 |
 | **네트워크 연결 오류** (`APIConnectionError`) | 인터넷 연결 불안정, 방화벽/프록시 차단 | 에러 메시지 출력 후 해당 단계를 건너뛰고 계속 진행 | 네트워크 상태 확인 후 재실행 |
 | **OpenAI 서버 오류** (`APIError`, 4xx/5xx) | 모델 폐지, 파라미터 미지원, 서버 일시 장애 등 | 에러 메시지 출력 후 해당 단계를 건너뛰고 계속 진행 | 오류 메시지의 `code`/`message` 확인, 잠시 후 재시도 |
@@ -615,7 +619,8 @@ git push -u origin main
 - **원인**: Windows(CRLF)와 Git 저장소 기준(LF)의 줄바꿈 문자가 달라서 Git이 자동 변환
   중이라는 **안내일 뿐, 오류가 아님**.
 - **해결**: 그냥 무시하고 진행해도 무방. 경고 자체를 없애려면 `.gitattributes`에
-  `* text=auto eol=lf`를 추가 (이 프로젝트에 이미 포함됨).
+  `* text=auto eol=lf`를 추가하면 됨 (현재 프로젝트에는 `.gitattributes` 파일이 포함되어
+  있지 않으므로, 경고를 없애고 싶다면 프로젝트 루트에 직접 생성해야 함).
 
 **2) `git push` 시 `! [rejected] main -> main (fetch first)`**
 
@@ -919,7 +924,6 @@ $ python main.py
             $ python main.py
             브리프 파일 경로를 입력하세요: brief.json
             출력 폴더 경로를 입력하세요 (엔터 시 ./output):
-
 
 
 
